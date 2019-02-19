@@ -13,6 +13,8 @@ from board_util import GoBoardUtil, BLACK, WHITE, EMPTY, BORDER, PASS, \
 import numpy as np
 import re
 
+stack = list()
+
 class GtpConnection():
 
     def __init__(self, go_engine, board, debug_mode = False):
@@ -50,7 +52,10 @@ class GtpConnection():
             "gogui-rules_side_to_move": self.gogui_rules_side_to_move_cmd,
             "gogui-rules_board": self.gogui_rules_board_cmd,
             "gogui-rules_final_result": self.gogui_rules_final_result_cmd,
-            "gogui-analyze_commands": self.gogui_analyze_cmd
+            "gogui-analyze_commands": self.gogui_analyze_cmd,
+            "push": self.save_board_state,
+            "undo": self.undo_board,
+            "solve": self.minimax_solve
         }
 
         # used for argument checking
@@ -352,6 +357,21 @@ class GtpConnection():
                      "pstring/Show Board/gogui-rules_board\n"
                      )
 
+    def save_board_state(self, args):
+        save_board(self.board)
+        
+    def undo_board(self, args):
+        self.board = undo();
+
+    def minimax_solve(self, args):
+        depth = 1
+        win, move = MinimaxBooleanOR(self.board, depth, self.board.current_player)
+        move_coord = point_to_coord(move, self.board.size)
+        move_as_string = format_point(move_coord)
+        self.respond(move_as_string)
+        
+        
+
 def point_to_coord(point, boardsize):
     """
     Transform point given as board array index 
@@ -408,4 +428,72 @@ def color_to_int(c):
     """convert character to the appropriate integer code"""
     color_to_int = {"b": BLACK , "w": WHITE, "e": EMPTY, 
                     "BORDER": BORDER}
-    return color_to_int[c] 
+    return color_to_int[c]
+
+def opposite_color(color):
+    if color == BLACK:
+        return WHITE
+    elif color == WHITE:
+        return BLACK
+
+def save_board(board):
+    b = board.copy()
+    stack.append(b)
+
+def undo():
+    return stack.pop()
+
+#minimax solver implementation ahead
+def MinimaxBooleanOR(board, depth, color):
+    moves = GoBoardUtil.generate_legal_moves(board, color)
+
+    
+    #base case
+    if (depth == 0 or len(moves) == 0):
+        return board.StatisticallyEvaluate()
+
+    for move in moves:
+
+        #debug
+        if color == BLACK:
+            print("Solving for Black move:", move)
+        elif color == WHITE:
+            print("Solving for White move:", move)
+        
+        save_board(board)
+        board.play_move_gomoku(move, color)
+        win, temp = MinimaxBooleanAND(board, depth-1, opposite_color(color))
+        if win:
+            board = undo()
+            return True, move
+        board = undo()
+
+    return False, None
+
+def MinimaxBooleanAND(board, depth, color):
+    moves = GoBoardUtil.generate_legal_moves(board, color)
+
+    #base case
+    if (depth == 0 or len(moves) == 0):
+        return board.StatisticallyEvaluate()
+
+    for move in moves:
+
+        #debug
+        if color == BLACK:
+            print("Solving for Black move:", move)
+        elif color == WHITE:
+            print("Solving for White move:", move)
+        
+        save_board(board)
+        board.play_move_gomoku(move, color)
+        win, temp = MinimaxBooleanOR(board, depth-1, opposite_color(color))
+        if not win:
+            board = undo()
+            return False, move
+        board = undo()
+
+    return True, None
+    
+    
+

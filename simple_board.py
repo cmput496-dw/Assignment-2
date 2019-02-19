@@ -472,7 +472,8 @@ class SimpleGoBoard(object):
 
     def heuristic_solve(self):
         """
-        Uses heuristic to see which color is more likely to win
+        Uses heuristic to see which color is more likely to win,
+        or a draw if neither side is more likely
         """
         white_points = where1d(self.board == WHITE)
         black_points = where1d(self.board == BLACK)
@@ -494,4 +495,12 @@ class SimpleGoBoard(object):
 
         else:
             return False, None
-        
+
+
+    def StatisticallyEvaluate(self):
+        win_status, win_color = self.check_game_end_gomoku()
+
+        if not win_status:
+            win_status, win_color = self.heuristic_solve()
+
+        return win_status, win_color
