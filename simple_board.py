@@ -380,17 +380,18 @@ class SimpleGoBoard(object):
         assert count <= 5
         return count == 5
 
-    def _point_direction_check_connect_gomoko_heuristic(self, point, shift, count):
+    def _point_direction_check_connect_gomoko_heuristic(self, point, shift):
         """
         Check how many heuristic points the point is worth
         """
+        count = 2
         color = self.board[point]
         d = shift
         p = point
         while True:
             p = p + d
             if self.board[p] == color:
-                count = count + 2
+                count = count * 2
                 #if count == 5:
                     #break
             elif self.board[p] == EMPTY:
@@ -402,7 +403,7 @@ class SimpleGoBoard(object):
         while True:
             p = p + d
             if self.board[p] == color:
-                count = count + 2
+                count = count * 2
                 #if count == 5:
                     #break
             elif self.board[p] == EMPTY:
@@ -440,16 +441,16 @@ class SimpleGoBoard(object):
         count = 2
         
         # check horizontal
-        count += self._point_direction_check_connect_gomoko_heuristic(point, 1, count)
+        count += self._point_direction_check_connect_gomoko_heuristic(point, 1)
             
         # check vertical
-        count += self._point_direction_check_connect_gomoko_heuristic(point, self.NS, count)
+        count += self._point_direction_check_connect_gomoko_heuristic(point, self.NS)
         
         # check y=x
-        count += self._point_direction_check_connect_gomoko_heuristic(point, self.NS + 1, count)
+        count += self._point_direction_check_connect_gomoko_heuristic(point, self.NS + 1)
         
         # check y=-x
-        count += self._point_direction_check_connect_gomoko_heuristic(point, self.NS - 1, count)
+        count += self._point_direction_check_connect_gomoko_heuristic(point, self.NS - 1)
         
         return count
     
@@ -488,19 +489,24 @@ class SimpleGoBoard(object):
             black_count += self.point_check_gomoku_heuristic(point)
 
         if white_count > black_count:
-            return True, WHITE
+            return True, WHITE, white_count
 
         elif black_count > white_count:
-            return True, BLACK
+            return True, BLACK, black_count
 
         else:
-            return False, None
+            return False, None, 0
 
 
-    def StatisticallyEvaluate(self):
+    def StatisticallyEvaluate(self, has_moves=True):
+        points = 10000
         win_status, win_color = self.check_game_end_gomoku()
 
-        if not win_status:
-            win_status, win_color = self.heuristic_solve()
+        if not win_status and has_moves:
+            win_status, win_color, points = self.heuristic_solve()
+        elif not win_status and not has_moves:
+            win_status = False
+            win_color = None
+            points = 0
 
-        return win_status, win_color
+        return win_status, win_color, points
