@@ -12,10 +12,7 @@ from board_util import GoBoardUtil, BLACK, WHITE, EMPTY, BORDER, PASS, \
                        MAXSIZE, coord_to_point
 import numpy as np
 import re
-import time
 
-
-TIME_LIMIT = 1
 stack = list()
 debug = list()
 INFINITY = 9223372036854775807
@@ -59,14 +56,11 @@ class GtpConnection():
             "gogui-rules_board": self.gogui_rules_board_cmd,
             "gogui-rules_final_result": self.gogui_rules_final_result_cmd,
             "gogui-analyze_commands": self.gogui_analyze_cmd,
-
-            "timelimit": self.timelimit_cmd,
-            "printtime": self.printtime_cmd,
             "push": self.save_board_state,
             "undo": self.undo_board,
             "solve": self.minimax_solve,
+            "timelimit": self.timelimit,
             "test": self.test
-          
         }
 
         # used for argument checking
@@ -82,9 +76,7 @@ class GtpConnection():
         }
 
     def test(self, args):
-        print('\033[91m')
-        print("In red")
-        print('\033[0m')
+        print("\033[1;32;40m RED")
     
     def write(self, data):
         stdout.write(data) 
@@ -284,10 +276,7 @@ class GtpConnection():
             else:
                 self.respond("resign")
             return
-        board_copy = self.board.copy()
-        is_win, move = Minimax(board_copy, 2, color)
-        if not is_win:
-            move = self.go_engine.get_move(self.board, color)
+        move = self.go_engine.get_move(self.board, color)
         if move == PASS:
             self.respond("pass")
             return
@@ -375,17 +364,6 @@ class GtpConnection():
                      "pstring/Rules GameID/gogui-rules_game_id\n"
                      "pstring/Show Board/gogui-rules_board\n"
                      )
-    def timelimit_cmd(self, args):
-        """
-        Sets the maximum time to use for all following genmove or solve commands, 
-        until it is changed by another timelimit command.
-        """
-        global TIME_LIMIT
-        setGlobalTime(int(args[0]))
-        self.respond('')
-
-    def printtime_cmd(self, args):
-        print(TIME_LIMIT)
 
     def save_board_state(self, args):
         save_board(self.board)
@@ -394,34 +372,20 @@ class GtpConnection():
         self.board = undo();
 
     def minimax_solve(self, args):
-        depth = 2
-        win, move = Minimax(self.board.copy(), depth, self.board.current_player)
+        depth = 6
+        move = Minimax(self.board.copy(), depth, self.board.current_player)
         #DEBUG
-        #print("minimax_solve: ")
-        #print(str(GoBoardUtil.get_twoD_board(self.board)))
+        print("minimax_solve: ")
+        print(str(GoBoardUtil.get_twoD_board(self.board)))
+        move_coord = point_to_coord(move, self.board.size)
+        move_as_string = format_point(move_coord)
         #DEBUG
         #print(debug)
         #print(stack)
+        self.respond(move_as_string)
 
-        #if win is 4, then solver ran out of time
-        if win == 4:
-            self.respond("unknown")
-        
-        elif win == 2:
-            if move == None:
-                self.respond(int_to_color(seslf.board.current_player))
-            else:
-                move_coord = point_to_coord(move, self.board.size)
-                move_as_string = format_point(move_coord)
-                string = int_to_color(self.board.current_player) + " " + move_as_string
-                self.respond(string)
-        elif win == 1:
-            move_coord = point_to_coord(move, self.board.size)
-            move_as_string = format_point(move_coord)
-            string = "draw " + move_as_string
-            self.respond(string)
-        else:
-            self.respond(int_to_color(opposite_color(self.board.current_player)))
+    def timelimit(self, args):
+        self.respond('');
         
         
 
@@ -483,12 +447,6 @@ def color_to_int(c):
                     "BORDER": BORDER}
     return color_to_int[c]
 
-def int_to_color(n):
-    """convert integer to the appropriate character code"""
-    int_to_color = {BLACK: "b" , WHITE: "w", EMPTY: "e",
-                    BORDER: "BORDER"}
-    return int_to_color[n]
-
 def opposite_color(color):
     if color == BLACK:
         return WHITE
@@ -506,58 +464,25 @@ def undo():
         print("Stack is empty!")
     return stack.pop()
 
-def setGlobalTime(time):
-    global TIME_LIMIT
-    TIME_LIMIT = time
-
 #simply returns the right move, if any
 def Minimax(board, depth, color):
-    start_time = time.time()
     moves = GoBoardUtil.generate_legal_moves_gomoku(board)
     best_points = 0
     best_move = None
-    is_win = 0
     alpha = NINFINITY
     beta = INFINITY
 
-    #special case: check to see if current board already has a winner
-    win, col = board.check_game_end_gomoku()
-    if win == True:
-        #if the opposite color already won, then return win=0
-        if col == opposite_color(color):
-            return 0, None;
-        #if our current winner already won, return
-    
     for move in moves:
-        time_elapsed = time.time() - start_time
-        if time_elapsed >= TIME_LIMIT:
-            return 4, None
-        #DEBUG - remove later
-        print(time_elapsed)
         save_board(board)
         board.play_move_gomoku(move, color)
         win, col, points = MinimaxBooleanAND(board, depth-1, opposite_color(color), alpha, beta)
-
-        #DEBUG
-        #move_coord = point_to_coord(move, board.size)
-        #move_as_string = format_point(move_coord)
-        #print("move: " + move_as_string + ", points: " + str(points))
-
-        
         if win and points > best_points:
-            is_win = 2
             best_move = move
             best_points = points
             alpha = best_points
-
-        #process a draw, best condition if win not an option
-        if (is_win != 2 and points == 0):
-            is_win = 1
-            best_move = move
-            
         board = undo()
 
-    return is_win, best_move
+    return best_move
 
 
 #minimax solver implementation ahead
@@ -565,17 +490,10 @@ def MinimaxBooleanOR(board, depth, color, alpha, beta):
     moves = GoBoardUtil.generate_legal_moves_gomoku(board)
     best_points = 0
     is_win = False
-
-    #DEBUG - remove later
-    global TIME_LIMIT
-    print(TIME_LIMIT)
     
     #base case
     if (depth == 0 or len(moves) == 0):
-        if len(moves)==0:
-            return board.StatisticallyEvaluate(False)
         return board.StatisticallyEvaluate()
-        
 
     for move in moves:        
         
@@ -585,18 +503,18 @@ def MinimaxBooleanOR(board, depth, color, alpha, beta):
         
         if col != color:
             win = False
-            points = -points
-        if win:
-            is_win = True
-        if points > best_points:
+        if win and points > best_points:
             best_points = points
+            is_win = True
+            #DEBUG
+            #print("MinimaxOR: ")
+            #print(str(GoBoardUtil.get_twoD_board(board)))
         board = undo()
         
         # deal with alpha-beta
-        #if best_points >= beta:
-            #alert("beta cutoff: " + str(beta))
-            #return is_win, color, best_points
-        if best_points >= alpha:
+        if best_points > beta:
+            return is_win, color, best_points
+        if best_points > alpha:
             alpha = best_points
         
     #DEBUG
@@ -610,8 +528,6 @@ def MinimaxBooleanAND(board, depth, color, alpha, beta):
     
     #base case
     if (depth == 0 or len(moves) == 0):
-        if len(moves)==0:
-            return board.StatisticallyEvaluate(False)
         return board.StatisticallyEvaluate()
 
     for move in moves:
@@ -622,30 +538,25 @@ def MinimaxBooleanAND(board, depth, color, alpha, beta):
         
         if col != opposite_color(color):
             win = False
-            points = -points
         if not win:
             board = undo()
-            return False, opposite_color(color), points
+            return False, opposite_color(color), 0
         if points < worst_points:
             worst_points = points
 
         board = undo()
 
         # deal with alpha-beta values
-        #if worst_points <= alpha:
-            #alert("alpha cutoff: " + str(alpha))
-            #return False, opposite_color(color), worst_points
-        if worst_points <= beta:
+        if worst_points < alpha:
+            return False, opposite_color(color), worst_points
+        if worst_points < beta:
             beta = points
 
     #DEBUG
-    #print("Worst points: " + str(worst_points))
-    #print("MinimaxAND: ")
-    #print(str(GoBoardUtil.get_twoD_board(board)))
+    print("Worst points: " + str(worst_points))
+    print("MinimaxAND: ")
+    print(str(GoBoardUtil.get_twoD_board(board)))
     return True, opposite_color(color), worst_points
-
-def alert(message):
-        print('\033[91m')
-        print(message)
-        print('\033[0m')    
+    
+    
 
