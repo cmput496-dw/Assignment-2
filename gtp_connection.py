@@ -285,7 +285,7 @@ class GtpConnection():
                 self.respond("resign")
             return
         board_copy = self.board.copy()
-        is_win, move = Minimax(board_copy, 2, color)
+        is_win, move = Minimax(board_copy, 3, color)
         if not is_win:
             move = self.go_engine.get_move(self.board, color)
         if move == PASS:
@@ -394,7 +394,7 @@ class GtpConnection():
         self.board = undo();
 
     def minimax_solve(self, args):
-        depth = 2
+        depth = 4
         win, move = Minimax(self.board.copy(), depth, self.board.current_player)
         #DEBUG
         #print("minimax_solve: ")
@@ -536,22 +536,31 @@ def Minimax(board, depth, color):
         print(time_elapsed)
         save_board(board)
         board.play_move_gomoku(move, color)
-        win, col, points = MinimaxBooleanAND(board, depth-1, opposite_color(color), alpha, beta)
+        win, col, points = MinimaxBooleanAND(board, depth-1, opposite_color(color), alpha, beta, start_time)
+
+        if col == EMPTY:
+            return 4, None
 
         #DEBUG
-        #move_coord = point_to_coord(move, board.size)
-        #move_as_string = format_point(move_coord)
-        #print("move: " + move_as_string + ", points: " + str(points))
+        move_coord = point_to_coord(move, board.size)
+        move_as_string = format_point(move_coord)
+        print("move: " + move_as_string + ", points: " + str(points))
 
         
-        if win and points > best_points:
+        if win and col==color:
             is_win = 2
             best_move = move
             best_points = points
             alpha = best_points
+            return is_win, best_move
 
+        if not win and col==opposite_color(color):
+            is_win = 0
+            best_move = None
+        
         #process a draw, best condition if win not an option
-        if (is_win != 2 and points == 0):
+        #if ((is_win != 2 and is_win != 0) and points == 0):
+        if not win and col==None:
             is_win = 1
             best_move = move
             
@@ -561,14 +570,25 @@ def Minimax(board, depth, color):
 
 
 #minimax solver implementation ahead
-def MinimaxBooleanOR(board, depth, color, alpha, beta):
+def MinimaxBooleanOR(board, depth, color, alpha, beta, start_time):
     moves = GoBoardUtil.generate_legal_moves_gomoku(board)
     best_points = 0
     is_win = False
 
+    time_elapsed = time.time() - start_time
     #DEBUG - remove later
-    global TIME_LIMIT
-    print(TIME_LIMIT)
+    print(time_elapsed)
+    #check to see if out of time
+    if time_elapsed >= TIME_LIMIT:
+        return False, EMPTY, 0
+
+    #check to see if terminal state
+    check_win, check_color = board.check_game_end_gomoku()
+    if check_win == True:
+        if check_color == color:
+            return True, check_color, 10000
+        else:
+            return False, check_color, 0
     
     #base case
     if (depth == 0 or len(moves) == 0):
@@ -581,13 +601,18 @@ def MinimaxBooleanOR(board, depth, color, alpha, beta):
         
         save_board(board)
         board.play_move_gomoku(move, color)
-        win, col, points = MinimaxBooleanAND(board, depth-1, opposite_color(color), alpha, beta)
+        win, col, points = MinimaxBooleanAND(board, depth-1, opposite_color(color), alpha, beta, start_time)
+
+        if win == False and col == EMPTY:
+            return False, EMPTY, 0
         
         if col != color:
             win = False
-            points = -points
+            points = 0
         if win:
             is_win = True
+            board = undo()
+            return is_win, color, 10000
         if points > best_points:
             best_points = points
         board = undo()
@@ -604,9 +629,24 @@ def MinimaxBooleanOR(board, depth, color, alpha, beta):
     #print(str(GoBoardUtil.get_twoD_board(board)))
     return is_win, color, best_points
 
-def MinimaxBooleanAND(board, depth, color, alpha, beta):
+def MinimaxBooleanAND(board, depth, color, alpha, beta, start_time):
     moves = GoBoardUtil.generate_legal_moves_gomoku(board)
     worst_points = 10000
+
+    time_elapsed = time.time() - start_time
+    #DEBUG - remove later
+    print(time_elapsed)
+    #check to see if out of time
+    if time_elapsed >= TIME_LIMIT:
+        return False, EMPTY, 0
+
+    #check to see if terminal state
+    check_win, check_color= board.check_game_end_gomoku()
+    if check_win == True:
+        if check_color == color:
+            return False, check_color, 0
+        else:
+            return True, check_color, 10000
     
     #base case
     if (depth == 0 or len(moves) == 0):
@@ -618,14 +658,17 @@ def MinimaxBooleanAND(board, depth, color, alpha, beta):
         
         save_board(board)
         board.play_move_gomoku(move, color)
-        win, col, points = MinimaxBooleanOR(board, depth-1, opposite_color(color), alpha, beta)
+        win, col, points = MinimaxBooleanOR(board, depth-1, opposite_color(color), alpha, beta, start_time)
+
+        if win == False and col == EMPTY:
+            return False, EMPTY, 0
         
         if col != opposite_color(color):
             win = False
             points = -points
         if not win:
             board = undo()
-            return False, opposite_color(color), points
+            return False, col, 0
         if points < worst_points:
             worst_points = points
 
@@ -642,7 +685,7 @@ def MinimaxBooleanAND(board, depth, color, alpha, beta):
     #print("Worst points: " + str(worst_points))
     #print("MinimaxAND: ")
     #print(str(GoBoardUtil.get_twoD_board(board)))
-    return True, opposite_color(color), worst_points
+    return True, opposite_color(color), 10000
 
 def alert(message):
         print('\033[91m')

@@ -502,9 +502,11 @@ class SimpleGoBoard(object):
         points = 10000
         win_status, win_color = self.check_game_end_gomoku()
 
+        # not a win, but not the end
         if not win_status and has_moves:
-            win_status, win_color, points = self.heuristic_solve()
-        elif not win_status and not has_moves:
+            return False, None, 0
+            #win_status, win_color, points = self.heuristic_solve()
+        if not win_status and not has_moves:
             win_status = False
             win_color = None
             points = 0
